@@ -7,6 +7,20 @@ use axstd::println;
 
 
 // TODO: Implement macro println_prefix.
+
+#[macro_export]
+macro_rules! println_prefix {
+    // Base case when there are no more arguments
+    ($prefix:expr,) => {
+        println!("{}", $prefix);
+    };
+    // Recursive case when there are more arguments
+    ($prefix:expr, $fmt:expr, $($arg:tt)*) => {
+        println!("{}{}", $prefix, format!($fmt, $($arg)*));
+    };
+}
+
+
 #[cfg(feature = "axstd")]
 use axstd::println_prefix;
 
