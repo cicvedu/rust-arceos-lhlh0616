@@ -15,6 +15,18 @@ macro_rules! print {
 
 /// Prints to the standard output, with a newline.
 #[macro_export]
+macro_rules! println_prefix {
+    // Base case when there are no more arguments
+    ($prefix:expr,) => {
+        println!("{}", $prefix);
+    };
+    // Recursive case when there are more arguments
+    ($prefix:expr, $fmt:expr, $($arg:tt)*) => {
+        println!("{}{}", $prefix, format!($fmt, $($arg)*));
+    };
+}
+
+#[macro_export]
 macro_rules! println {
     () => { $crate::print!("\n") };
     ($($arg:tt)*) => {
