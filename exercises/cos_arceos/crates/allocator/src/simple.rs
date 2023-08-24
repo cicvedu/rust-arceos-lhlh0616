@@ -5,21 +5,7 @@
 use core::alloc::Layout;
 use core::num::NonZeroUsize;
 
-pub trait AllocResult<T> {
-    type Error;
-    fn result(value: T) -> Result<T, Self::Error>;
-}
-
-pub trait AbstractAllocator {
-    fn init(&mut self, start: usize, size: usize);
-}
-
-impl<T> AllocResult<T> for T {
-    type Error = ();
-    fn result(value: T) -> Result<T, Self::Error> {
-        Ok(value)
-    }
-}
+use crate::{AllocResult, BaseAllocator, ByteAllocator};
 
 pub struct SimpleByteAllocator {
     start: usize,
@@ -39,40 +25,34 @@ impl SimpleByteAllocator {
     }
 }
 
-impl AbstractAllocator for SimpleByteAllocator {
+impl BaseAllocator for SimpleByteAllocator {
     fn init(&mut self, start: usize, size: usize) {
         self.start = start;
         self.next = self.start;
         self.end = self.start + size;
         self.allocations = 0;
     }
-}
 
-pub trait ByteAllocator: AbstractAllocator {
-    fn alloc(&mut self, layout: Layout) -> Result<NonZeroUsize, ()>;
-    fn dealloc(&mut self, pos: NonZeroUsize, layout: Layout);
-    fn total_bytes(&self) -> usize;
-    fn used_bytes(&self) -> usize;
-    fn free_bytes(&self) -> usize {
-        self.total_bytes() - self.used_bytes()
+    fn add_memory(&mut self, _start: usize, _size: usize) -> AllocResult {
+        Err(crate::AllocError::NoMemory)
     }
 }
 
 impl ByteAllocator for SimpleByteAllocator {
-    fn alloc(&mut self, layout: Layout) -> Result<NonZeroUsize, ()> {
+    fn alloc(&mut self, layout: Layout) -> AllocResult<NonZeroUsize> {
         let size = layout.size();
         let align = layout.align();
         let align_mask = !(align - 1);
-
         let start = (self.next + align - 1) & align_mask;
 
         if start + size > self.end {
-            Err(())
+            Err(crate::AllocError::NoMemory)
         } else {
             self.allocations += 1;
             self.next = start + size;
-            Ok(unsafe { NonZeroUsize::new_unchecked(start) })
+            Ok(NonZeroUsize::new(start).unwrap())
         }
+        
     }
 
     fn dealloc(&mut self, _pos: NonZeroUsize, _layout: Layout) {
@@ -88,5 +68,9 @@ impl ByteAllocator for SimpleByteAllocator {
 
     fn used_bytes(&self) -> usize {
         self.next - self.start
+    }
+
+    fn available_bytes(&self) -> usize {
+        self.end - self.next
     }
 }
