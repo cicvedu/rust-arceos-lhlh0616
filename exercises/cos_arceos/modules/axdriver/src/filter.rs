@@ -1,106 +1,59 @@
-use cfg_if::cfg_if;
-use log::warn;
-
-use super::prelude::*;
-use driver_common::{BaseDriverOps, DevResult, DeviceType};
-use driver_pci::{PciRoot, DeviceFunction, DeviceFunctionInfo};
-use crate::virtio::VirtIoHalImpl;
-
-pub struct NetFilter<T> {
-    pub inner: T,
+#[cfg(not(feature = "net"))]
+use crate::virtio::*;
+#[cfg(feature = "net")]
+use driver_net::*;
+use driver_virtio::*;
+#[cfg(not(feature = "net"))]
+pub type NetFilter<T> = T;
+#[cfg(feature = "net")]
+pub struct NetFilter<T: NetDriverOps> {
+    inner: T,
 }
 
-enum VirtIoTransport {
-    Pci(driver_virtio::PciTransport),
-    Mmio(driver_virtio::MmioTransport),
-}
+#[cfg(feature = "net")]
+impl<T: NetDriverOps> NetFilter<T> {
+    pub fn device_name(&self) -> &str {
+        self.inner.device_name()
+    }
 
-cfg_if! {
-    if #[cfg(bus = "pci")] {
-        fn get_virtio_transport() -> VirtIoTransport {
-            VirtIoTransport::Pci(driver_virtio::PciTransport)
+    pub fn device_type(&self) -> DeviceType {
+        self.inner.device_type()
+    }
+
+    pub fn transmit(&mut self, tx_buf: NetBufPtr) -> DevResult {
+        warn!("Filter: transmit len[{}]", tx_buf.packet_len());
+        self.inner.transmit(tx_buf)
+    }
+
+    pub fn receive(&mut self) -> DevResult<NetBufPtr> {
+        let b = self.inner.receive();
+        if let Ok(ref v) = b {
+            warn!("Filter: receive len[{}]", v.packet_len());
         }
-    } else if #[cfg(bus =  "mmio")] {
-        fn get_virtio_transport() -> VirtIoTransport {
-            VirtIoTransport::Mmio(driver_virtio::MmioTransport)
-        }
-    }
-}
-
-impl<T> NetFilter<T> {
-    #[inline]
-    fn inner(&self) -> &T {
-        &self.inner
+        b
     }
 
-    #[inline]
-    fn inner_mut(&mut self) -> &mut T {
-        &mut self.inner
-    }
-}
-
-impl<T> BaseDriverOps for NetFilter<driver_virtio::VirtIoNetDev<VirtIoHalImpl, VirtIoTransport, 64>>
-where
-    T: BaseDriverOps,
-{
-    fn device_type(&self) -> DeviceType {
-        DeviceType::Net
+    pub fn mac_address(&self) -> EthernetAddress {
+        self.inner.mac_address()
     }
 
-    fn device_name(&self) -> &str {
-        "my-net"
+    pub fn can_transmit(&self) -> bool {
+        self.inner.can_transmit()
     }
 
-    #[inline]
-    fn mac_address(&self) -> driver_net::EthernetAddress {
-        self.inner().mac_address()
+    pub fn can_receive(&self) -> bool {
+        self.inner.can_receive()
     }
 
-    #[inline]
-    fn can_transmit(&self) -> bool {
-        self.inner().can_transmit()
+    pub fn recycle_rx_buffer(&mut self, rx_buf: NetBufPtr) -> DevResult {
+        self.inner.recycle_rx_buffer(rx_buf)
     }
 
-    #[inline]
-    fn can_receive(&self) -> bool {
-        self.inner().can_receive()
+    pub fn recycle_tx_buffers(&mut self) -> DevResult {
+        self.inner.recycle_tx_buffers()
     }
 
-    #[inline]
-    fn rx_queue_size(&self) -> usize {
-        self.inner().rx_queue_size()
-    }
-
-    #[inline]
-    fn tx_queue_size(&self) -> usize {
-        self.inner().tx_queue_size()
-    }
-
-    #[inline]
-    fn recycle_rx_buffer(&mut self, rx_buf: driver_net::NetBufPtr) -> DevResult {
-        self.inner_mut().recycle_rx_buffer(rx_buf)
-    }
-
-    #[inline]
-    fn recycle_tx_buffers(&mut self) -> DevResult {
-        self.inner_mut().recycle_tx_buffers()
-    }
-
-    #[inline]
-    fn transmit(&mut self, tx_buf: driver_net::NetBufPtr) -> DevResult {
-        warn!("Filter: transmit len [{}]", tx_buf.packet_len());
-        self.inner_mut().transmit(tx_buf)
-    }
-
-    #[inline]
-    fn receive(&mut self) -> DevResult<driver_net::NetBufPtr> {
-        let ret = self.inner_mut().receive()?;
-        warn!("Filter: receive len[{:?}]", ret.packet_len());
-        Ok(ret)
-    }
-
-    #[inline]
-    fn alloc_tx_buffer(&mut self, size: usize) -> DevResult<driver_net::NetBufPtr> {
-        self.inner_mut().alloc_tx_buffer(size)
+    pub fn alloc_tx_buffer(&mut self, size: usize) -> DevResult<NetBufPtr> {
+        self.inner.alloc_tx_buffer(size)
     }
 }
