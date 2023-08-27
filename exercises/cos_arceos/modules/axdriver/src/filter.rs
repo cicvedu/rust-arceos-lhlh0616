@@ -34,7 +34,7 @@ cfg_if! {
             }
         }
 
-       impl<Driver: VirtIoNetDev<VirtIoHalImpl, VirtIoTransport, 64>> NetDriverOps for NetFilter<Driver>{
+       impl NetDriverOps for NetFilter<driver_virtio::VirtIoNetDev<VirtIoHalImpl, VirtIoTransport, 64>>{
             #[inline]
             fn mac_address(&self) -> driver_net::EthernetAddress {
                 self.inner.mac_address()
